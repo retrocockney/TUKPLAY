@@ -24,14 +24,6 @@
   button:hover { background: #3d5fb0; }
   #help, #resultsText { max-width: 640px; text-align: center; line-height: 1.6; font-size: 15px; text-shadow: 0 1px 3px #000; }
   .hidden { display: none !important; }
-  #btnSettings, #btnPauseSettings { display: none !important; }
-  #touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
-  #touch * { user-select: none; -webkit-user-select: none; }
-  #joyBase { position: absolute; left: 24px; bottom: 24px; width: 150px; height: 150px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.4); touch-action: none; pointer-events: auto; }
-  #joyKnob { position: absolute; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,255,255,0.45); left: 44px; top: 44px; }
-  #aimPad { position: absolute; right: 0; top: 0; width: 50%; height: 55%; touch-action: none; pointer-events: auto; }
-  .tbtn { position: absolute; width: 78px; height: 78px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.55); color: #fff; font-weight: bold; font-size: 14px; display: flex; align-items: center; justify-content: center; touch-action: none; pointer-events: auto; text-shadow: 0 1px 2px #000; }
-  #tapLayer { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
   .cust { display: flex; gap: 60px; }
   .cust > div { display: flex; flex-direction: column; align-items: center; gap: 12px; }
   h2 { margin: 0; font-size: 24px; text-shadow: 0 2px 6px #000; }
@@ -57,17 +49,6 @@
 <div id="scoreboard" class="hidden"></div>
 <div id="banner"></div>
 <div id="hint">WASD drive, mouse aim, left click fire, Q mode, Space jump, Shift turbo, R reload, P pause, Esc menu</div>
-<div id="touch" class="hidden">
-  <div id="tapLayer"></div>
-  <div id="aimPad"></div>
-  <div id="joyBase"><div id="joyKnob"></div></div>
-  <div id="tPause" class="tbtn" style="right:12px;top:12px;width:64px;height:64px;font-size:12px;">PAUSE</div>
-  <div id="tScore" class="tbtn" style="right:12px;top:90px;width:64px;height:64px;font-size:12px;">SCORE</div>
-  <div id="tJump" class="tbtn" style="right:150px;bottom:40px;">JUMP</div>
-  <div id="tTurbo" class="tbtn" style="right:30px;bottom:150px;">TURBO</div>
-  <div id="tMode" class="tbtn" style="right:150px;bottom:150px;">MODE</div>
-  <div id="tReload" class="tbtn" style="right:270px;bottom:60px;">RELOAD</div>
-</div>
 <div id="cross0" class="cross"><div class="ring"></div></div>
 <div id="cross1" class="cross"><div class="ring"></div></div>
 
@@ -79,7 +60,7 @@
   <button id="btnCustom">Customize</button>
   <button id="btnSettings">Settings</button>
   <button id="btnHelp">How to Play</button>
-  <p id="help" class="hidden">Drive with the left circle. Drag on the right side to aim. Tap anywhere on the screen to shoot there (in one-handed mode), JUMP jumps, TURBO boosts, MODE switches between precise and one-handed driving, RELOAD reloads, and SCORE shows the scoreboard. Drive into the other tuk-tuks and rockets to win.</p>
+  <p id="help" class="hidden">Drive your tuk-tuk around the arena and blow up the other tuk-tuks with rockets. Three rocket hits and you are out for a few seconds. Most kills after 2 minutes wins. Bots drive around and shoot at you, so stay mobile.<br><br>WASD drive, mouse aim, left click fire, Q switches driving mode, Space jump, Shift turbo, R reload, P pause. Controls can be changed in Settings.<br>Precise driving is tighter but you cannot shoot. One-handed lets you shoot but steering is looser.</p>
 </div>
 <div id="pause" class="screen hidden">
   <h1>PAUSED</h1>
@@ -100,8 +81,6 @@
   <button id="btnFindTruck">Monster Truck (4 players)</button>
   <button id="btnCancelFind">Cancel search</button>
   <p id="onlineStatus" class="status">Not connected</p>
-  <p class="status">2v2 and Monster Truck: if everyone in the queue holds the button below, the rest of the match fills with bots.</p>
-  <button id="btnFillHold">Hold to fill with bots</button>
   <button id="btnOnlineBack">Back</button>
 </div>
 <div id="botmodes" class="screen hidden">
@@ -138,12 +117,12 @@
 <script>
 (function () {
   // ---------- Renderer / scene ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setScissorTest(true);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   document.body.appendChild(renderer.domElement);
@@ -156,7 +135,7 @@
   const sun = new THREE.DirectionalLight(0xffffff, 0.6);
   sun.position.set(30, 120, 40);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = -120; sun.shadow.camera.right = 120;
   sun.shadow.camera.top = 170; sun.shadow.camera.bottom = -170;
   sun.shadow.camera.near = 10; sun.shadow.camera.far = 400;
@@ -356,7 +335,6 @@
   let teamColorFor = null;
   let lastMatch = null;
   let botMode = '1v1';
-  let queuedMode = null;
   let truckMatch = false;
   const spectateCam = new THREE.PerspectiveCamera(60, 1, 0.1, 1200);
   // In monster truck mode, a tuk-tuk that is knocked out stays out for the round
@@ -1093,11 +1071,10 @@
   }
 
   // ---------- Effects ----------
-  const EXPLO_GEO = new THREE.SphereGeometry(1, 10, 10);
   function explode(pos, size) {
     const s0 = size || 0.5;
     const m = new THREE.Mesh(
-      EXPLO_GEO,
+      new THREE.SphereGeometry(s0, 12, 12),
       new THREE.MeshBasicMaterial({ color: 0xffaa33, transparent: true, opacity: 0.9 })
     );
     m.position.copy(pos);
@@ -1116,10 +1093,7 @@
     bannerTimer = 1.2;
   }
 
-  let hudLast = -1;
   function updateHud() {
-    if (timeAll - hudLast < 0.2) return;
-    hudLast = timeAll;
     const humans = vehicles.filter(v => v.human);
     humans.forEach((v, idx) => {
       hudEls[idx].innerHTML =
@@ -1265,21 +1239,6 @@
     refreshBindRows();
   }
 
-  // Remapped keys are saved in this browser and loaded next time
-  const BIND_KEY = 'tuktuk_binds_v1';
-  function saveBinds() {
-    const b = {};
-    for (const [, key] of ACTIONS) b[key] = P1[key];
-    try { localStorage.setItem(BIND_KEY, JSON.stringify(b)); } catch (err) { /* not saved: still works */ }
-  }
-  function loadBinds() {
-    try {
-      const d = JSON.parse(localStorage.getItem(BIND_KEY) || 'null');
-      if (!d) return;
-      for (const [, key] of ACTIONS) if (typeof d[key] === 'string') P1[key] = d[key];
-    } catch (err) { /* bad save: use the defaults */ }
-  }
-
   function openSettings(from) {
     settingsFrom = from;
     titleEl.classList.add('hidden');
@@ -1312,15 +1271,57 @@
   document.getElementById('btnResume').addEventListener('click', togglePause);
   document.getElementById('btnPauseSettings').addEventListener('click', () => openSettings('pause'));
   document.getElementById('btnQuit').addEventListener('click', goTitle);
-  loadBinds();
   buildBindRows();
 
-  // ---------- Touch input only ----------
-  // Any touch unlocks sound, since browsers need a first touch before playing audio
-  ['pointerdown', 'touchstart'].forEach(evt => window.addEventListener(evt, () => {
+  // ---------- Input ----------
+  window.addEventListener('keydown', e => {
+    if (rebinding) {
+      if (e.code !== 'Escape') P1[rebinding] = e.code;
+      rebinding = null;
+      refreshBindRows();
+      e.preventDefault();
+      return;
+    }
+    keys[e.code] = true;
+    if (e.code === 'Tab') e.preventDefault();
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'Enter'].includes(e.code)
+        && matchState === 'playing') {
+      e.preventDefault();
+    }
+    if (e.code === 'Escape') {
+      if (matchState === 'playing' || matchState === 'paused') goTitle();
+      return;
+    }
+    if (e.repeat) return;
+    if (e.code === P1.pause && (matchState === 'playing' || matchState === 'paused')) { togglePause(); return; }
+    if (matchState !== 'playing') return;
+    const v = vehicles.find(x => x.human);
+    if (!v) return;
+    if (e.code === P1.mode) toggleMode(v);
+    if (e.code === P1.jump) jumpVehicle(v);
+    if (e.code === P1.reload) reloadVehicle(v);
+    if (P1.fireKey && P1.fireKey !== 'Mouse0' && e.code === P1.fireKey) fireVehicle(v);
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+  ['pointerdown', 'keydown'].forEach(evt => window.addEventListener(evt, () => {
     const a = getAudio();
     if (a && a.state === 'suspended') a.resume();
-  }, { passive: true }));
+  }));
+  window.addEventListener('mousemove', e => {
+    mouseClient.x = e.clientX;
+    mouseClient.y = e.clientY;
+  });
+  window.addEventListener('mousedown', e => {
+    if (rebinding && e.button === 0) {
+      P1[rebinding] = 'Mouse0';
+      rebinding = null;
+      refreshBindRows();
+      return;
+    }
+    if (matchState !== 'playing' || e.button !== 0) return;
+    const p1 = vehicles.find(x => x.human);
+    if (p1) fireVehicle(p1);
+  });
 
   document.getElementById('btn1').addEventListener('click', () => {
     titleEl.classList.add('hidden');
@@ -1470,19 +1471,15 @@
   async function findMatch(mode) {
     try { await connectServer(); } catch (err) { return; }
     sendNet({ type: 'queue', mode: mode });
-    queuedMode = mode === '1v1' ? null : mode;
     setStatus('Searching for a ' + mode + ' match...');
   }
 
   function handleNet(msg) {
     switch (msg.type) {
       case 'hello': myId = msg.id; break;
-      case 'fillStatus':
-        setStatus('Hold E to fill with bots: ' + msg.holding + ' of ' + msg.total + ' holding');
-        break;
       case 'queued': setStatus('Waiting for players (' + msg.waiting + ' in queue)'); break;
-      case 'queueLeft': queuedMode = null; setStatus('Search cancelled'); break;
-      case 'matchFound': queuedMode = null; startOnlineMatch(msg); break;
+      case 'queueLeft': setStatus('Search cancelled'); break;
+      case 'matchFound': startOnlineMatch(msg); break;
       case 'state': {
         const v = vehicles.find(x => x.netId === msg.id);
         if (v) { v.net = msg; v.health = msg.health; v.alive = msg.alive; }
@@ -1679,7 +1676,7 @@
   document.getElementById('btnFind1').addEventListener('click', () => findMatch('1v1'));
   document.getElementById('btnFind2').addEventListener('click', () => findMatch('2v2'));
   document.getElementById('btnFindTruck').addEventListener('click', () => findMatch('truck'));
-  document.getElementById('btnCancelFind').addEventListener('click', () => { queuedMode = null; sendNet({ type: 'leaveQueue' }); });
+  document.getElementById('btnCancelFind').addEventListener('click', () => sendNet({ type: 'leaveQueue' }));
   document.getElementById('btnRematch').addEventListener('click', () => {
     if (onlineMode) {
       sendNet({ type: 'rematch' });
@@ -1760,122 +1757,6 @@
     return truck.alive ? 'truck' : 'tuks';
   }
 
-  // ---------- Touch controls (phones and tablets) ----------
-  // Same game and same server as the desktop version, so the two can play together
-  const IS_TOUCH = true; // always on in TukTukServMobile
-  const touchEl = document.getElementById('touch');
-  const joyBase = document.getElementById('joyBase');
-  const joyKnob = document.getElementById('joyKnob');
-  const JOY_R = 60;
-  let joyId = null, joyCx = 0, joyCy = 0;
-
-  function humanVehicle() { return vehicles.find(v => v.human); }
-
-  function joyMove(t) {
-    let dx = t.clientX - joyCx, dy = t.clientY - joyCy;
-    const d = Math.hypot(dx, dy);
-    const k = d > JOY_R ? JOY_R / d : 1;
-    dx *= k; dy *= k;
-    joyKnob.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
-    const dead = 0.25 * JOY_R;
-    keys[P1.left] = dx < -dead;
-    keys[P1.right] = dx > dead;
-    keys[P1.up] = dy < -dead;
-    keys[P1.down] = dy > dead;
-  }
-  function joyEnd() {
-    joyId = null;
-    joyKnob.style.transform = '';
-    keys[P1.up] = keys[P1.down] = keys[P1.left] = keys[P1.right] = false;
-  }
-  joyBase.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const t = e.changedTouches[0];
-    joyId = t.identifier;
-    const r = joyBase.getBoundingClientRect();
-    joyCx = r.left + r.width / 2;
-    joyCy = r.top + r.height / 2;
-    joyMove(t);
-  }, { passive: false });
-  joyBase.addEventListener('touchmove', e => {
-    e.preventDefault();
-    for (const t of e.changedTouches) if (t.identifier === joyId) joyMove(t);
-  }, { passive: false });
-  joyBase.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) if (t.identifier === joyId) joyEnd();
-  });
-  joyBase.addEventListener('touchcancel', joyEnd);
-
-  // A quick tap (no drag) on the screen fires at that spot
-  let tapFire = false, tapStart = null;
-  function tapBegin(t) {
-    tapStart = { id: t.identifier, x: t.clientX, y: t.clientY, time: performance.now() };
-  }
-  function tapFinish(t) {
-    if (!tapStart || t.identifier !== tapStart.id) return;
-    const quick = performance.now() - tapStart.time < 300 && Math.hypot(t.clientX - tapStart.x, t.clientY - tapStart.y) < 12;
-    if (quick && matchState === 'playing') {
-      mouseClient.x = t.clientX;
-      mouseClient.y = t.clientY;
-      tapFire = true;
-    }
-    tapStart = null;
-  }
-  const tapLayer = document.getElementById('tapLayer');
-  tapLayer.addEventListener('touchstart', e => { e.preventDefault(); tapBegin(e.changedTouches[0]); }, { passive: false });
-  tapLayer.addEventListener('touchend', e => { e.preventDefault(); tapFinish(e.changedTouches[0]); }, { passive: false });
-  tapLayer.addEventListener('touchcancel', () => { tapStart = null; });
-
-  // Dragging on the right side moves the aim cursor, like the mouse does on desktop
-  const aimPad = document.getElementById('aimPad');
-  let aimId = null, aimLast = { x: 0, y: 0 };
-  aimPad.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const t = e.changedTouches[0];
-    aimId = t.identifier;
-    aimLast = { x: t.clientX, y: t.clientY };
-    tapBegin(t);
-  }, { passive: false });
-  aimPad.addEventListener('touchmove', e => {
-    e.preventDefault();
-    for (const t of e.changedTouches) {
-      if (t.identifier !== aimId) continue;
-      mouseClient.x = clamp(mouseClient.x + (t.clientX - aimLast.x) * 1.6, 0, window.innerWidth);
-      mouseClient.y = clamp(mouseClient.y + (t.clientY - aimLast.y) * 1.6, 0, window.innerHeight);
-      aimLast = { x: t.clientX, y: t.clientY };
-    }
-  }, { passive: false });
-  aimPad.addEventListener('touchend', e => {
-    for (const t of e.changedTouches) {
-      if (t.identifier === aimId) aimId = null;
-      tapFinish(t);
-    }
-  });
-
-  function tapButton(id, action) {
-    const el = document.getElementById(id);
-    el.addEventListener('touchstart', e => {
-      e.preventDefault();
-      if (matchState === 'playing') action();
-    }, { passive: false });
-  }
-  tapButton('tJump', () => { const v = humanVehicle(); if (v) jumpVehicle(v); });
-  tapButton('tMode', () => { const v = humanVehicle(); if (v) toggleMode(v); });
-  tapButton('tReload', () => { const v = humanVehicle(); if (v) reloadVehicle(v); });
-  tapButton('tPause', () => togglePause());
-  // Hold SCORE to see the scoreboard (same as holding Tab on desktop)
-  const tScore = document.getElementById('tScore');
-  tScore.addEventListener('touchstart', e => { e.preventDefault(); keys['Tab'] = true; }, { passive: false });
-  ['touchend', 'touchcancel'].forEach(ev => tScore.addEventListener(ev, () => { keys['Tab'] = false; }));
-  // Hold this in the queue to fill 2v2 or Monster Truck with bots (replaces holding E)
-  const fillBtn = document.getElementById('btnFillHold');
-  fillBtn.addEventListener('touchstart', e => { e.preventDefault(); if (queuedMode) sendNet({ type: 'fillKey', down: true }); }, { passive: false });
-  ['touchend', 'touchcancel'].forEach(ev => fillBtn.addEventListener(ev, () => { if (queuedMode) sendNet({ type: 'fillKey', down: false }); }));
-
-  const tTurbo = document.getElementById('tTurbo');
-  tTurbo.addEventListener('touchstart', e => { e.preventDefault(); keys[P1.turbo] = true; }, { passive: false });
-  ['touchend', 'touchcancel'].forEach(ev => tTurbo.addEventListener(ev, () => { keys[P1.turbo] = false; }));
-
   // ---------- Rendering: full screen for one player, split screen for two ----------
   function render() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -1916,11 +1797,6 @@
 
       if (matchState === 'playing') {
         for (const v of vehicles) updateVehicle(v, dt);
-        if (tapFire) {
-          tapFire = false;
-          const me = vehicles.find(v => v.human);
-          if (me) fireVehicle(me);
-        }
         if (onlineMode) sendMyState(dt);
         trampleCheck(dt);
         resolveVehicleCollisions(dt);
@@ -1988,10 +1864,11 @@
       const e = explosions[i];
       e.t += dt;
       const s = 1 + e.t * 6;
-      e.mesh.scale.setScalar(s * e.base);
+      e.mesh.scale.setScalar(s);
       e.mesh.material.opacity = Math.max(0, 0.9 - e.t * 2.5);
       if (e.t > 0.4) {
         scene.remove(e.mesh);
+        e.mesh.geometry.dispose();
         e.mesh.material.dispose();
         explosions.splice(i, 1);
       }
@@ -2002,10 +1879,6 @@
       if (bannerTimer <= 0) bannerEl.style.opacity = 0;
     }
 
-    if (IS_TOUCH) {
-      touchEl.classList.toggle('hidden', matchState !== 'playing');
-      hintEl.style.display = 'none';
-    }
     updateSpectate();
     updateScoreboard();
     render();
